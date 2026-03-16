@@ -220,6 +220,7 @@ func main() {
 	var utlsOverride string
 	var hostOverride string
 	var forceDirectMode bool
+	var querySizeOverride int
 	var uriParts []string
 
 	for i := 1; i < len(os.Args); i++ {
@@ -256,6 +257,17 @@ func main() {
 			} else {
 				log.Fatal("--utls requires a value (e.g., --utls Chrome_120, --utls none)")
 			}
+		case "--query-size", "-query-size":
+			if i+1 < len(os.Args) {
+				v, err := strconv.Atoi(os.Args[i+1])
+				if err != nil || v < 50 || v > 200 {
+					log.Fatal("--query-size requires a value between 50 and 200 (bytes per query)")
+				}
+				querySizeOverride = v
+				i++
+			} else {
+				log.Fatal("--query-size requires a value (e.g., --query-size 100)")
+			}
 		case "--direct", "-direct":
 			forceDirectMode = true
 		case "--version", "-version", "-v":
@@ -277,11 +289,11 @@ func main() {
 
 	// Join all non-flag args in case terminal line-wrapping split the URI
 	uri := strings.TrimSpace(strings.Join(uriParts, ""))
-	connectWithParams(uri, portOverride, hostOverride, dnsOverride, utlsOverride, forceDirectMode)
+	connectWithParams(uri, portOverride, hostOverride, dnsOverride, utlsOverride, forceDirectMode, querySizeOverride)
 }
 
 // connectWithParams runs the tunnel connection with the given parameters.
-func connectWithParams(uri string, portOverride int, hostOverride string, dnsOverride string, utlsOverride string, forceDirectMode bool) {
+func connectWithParams(uri string, portOverride int, hostOverride string, dnsOverride string, utlsOverride string, forceDirectMode bool, querySize int) {
 	profile, err := parseURI(uri)
 	if err != nil {
 		log.Fatalf("Failed to parse URI: %v", err)
@@ -394,6 +406,11 @@ func connectWithParams(uri string, portOverride int, hostOverride string, dnsOve
 	}
 	fmt.Printf("  Transport:  %s\n", transport)
 	fmt.Printf("  Auth Mode:  %v\n", authMode)
+	if querySize > 0 {
+		fmt.Printf("  Query Size: %d bytes\n", querySize)
+	} else {
+		fmt.Printf("  Query Size: full capacity\n")
+	}
 	if len(profile.PublicKey) > 16 {
 		fmt.Printf("  Public Key: %s...%s\n", profile.PublicKey[:8], profile.PublicKey[len(profile.PublicKey)-8:])
 	} else {
@@ -410,6 +427,10 @@ func connectWithParams(uri string, portOverride int, hostOverride string, dnsOve
 	}
 
 	client.SetAuthoritativeMode(authMode)
+
+	if querySize > 0 {
+		client.SetMaxPayload(int64(querySize))
+	}
 
 	if profile.TunnelType == "sayedns" || profile.TunnelType == "sayedns_ssh" {
 		client.SetNoizMode(true)
@@ -621,6 +642,9 @@ Options (connect):
   --utls FINGERPRINT  Fix TLS fingerprint (default: random from distribution)
                       Examples: Chrome_120, Firefox_120, iOS_14, random, none
                       Weighted: "3*Chrome_120,1*Firefox_120"
+  --query-size BYTES  Cap DNS query payload size (50-200, default: full capacity)
+                      Lower = stealthier but slower. Presets: 100 (large),
+                      80 (medium), 60 (small), 50 (minimum)
   --version           Show version
   --help              Show this help
 
@@ -646,6 +670,7 @@ Examples:
   %[2]s --utls Chrome_120 slipnet://BASE64...
   %[2]s --dns 1.1.1.1 slipnet://BASE64...
   %[2]s --dns <server-ip> --direct --port 9050 slipnet://BASE64...
+  %[2]s --query-size 80 slipnet://BASE64...
   %[2]s --host 0.0.0.0 slipnet://BASE64...
   %[2]s scan --domain t.example.com --ips resolvers.txt
   %[2]s scan --domain t.example.com --ip 8.8.8.8

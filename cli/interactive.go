@@ -364,7 +364,7 @@ func runConnectFromArgs(args []string) {
 	}
 
 	uri := strings.TrimSpace(strings.Join(uriParts, ""))
-	connectWithParams(uri, portOverride, hostOverride, dnsOverride, utlsOverride, forceDirectMode)
+	connectWithParams(uri, portOverride, hostOverride, dnsOverride, utlsOverride, forceDirectMode, 0)
 }
 
 func clearScreen() {
